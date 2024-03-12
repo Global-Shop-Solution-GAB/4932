@@ -1,0 +1,144 @@
+Program.Sub.ScreenSU.Start
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+
+Variable.Global.iBIRunID.Declare(Long,-1)
+Variable.Global.iBILogID.Declare(Long,-1)
+Variable.Global.bSentinel.Declare(Boolean,False)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+F.ODBC.Connection!con.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+F.Intrinsic.Control.CallSub(Loaddata)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+    Function.Intrinsic.String.Concat("Project: BIR_4932_OE_WL_Shipping_Label.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+    F.Intrinsic.UI.Msgbox(V.Local.sError)
+    F.Intrinsic.Control.CallSub(Unload)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Main.End
+
+Program.Sub.Unload.Start
+F.Intrinsic.Control.SetErrorHandler("Unload_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+F.ODBC.Connection!con.Close
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Unload_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+    Function.Intrinsic.String.Concat("Project: BIR_4932_OE_WL_Shipping_Label.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+    F.Intrinsic.UI.Msgbox(V.Local.sError)
+    F.Intrinsic.Control.End
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.Unload.End
+
+Program.Sub.LoadData.Start
+F.Intrinsic.Control.SetErrorHandler("LoadData_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sSql.Declare(String)
+V.Local.iC.Declare(Long)
+v.Local.iCount.Declare(Long)
+v.Local.sPack.Declare(String)
+v.Local.sPallet.Declare(String)
+v.Local.sPart.Declare(String)
+v.Local.sDesc.Declare(String)
+v.Local.sQty.Declare(String)
+v.Local.iQty.Declare(Long)
+v.Local.sRet.Declare(String)
+v.Local.sLine.Declare(String)
+
+
+
+'Getting run ID passed down
+V.Global.iBIRunID.Set(V.Passed.DATA-GAB-0)
+'Getting log ID passed down
+V.Global.iBILogID.Set(V.Passed.DATA-GAB-1)
+'Getting Sentinel flag passed down
+Variable.Global.bSentinel.Set(Variable.Passed.DATA-GAB-2)
+
+
+'Loading data from Y table, as being label being printed from Menu, Selecting all fields as all fields to datatable
+F.Intrinsic.String.Build("Select * From Y_OE_SHIP_WL where RUNID = {0}",V.Global.iBIRunID,V.Local.sSql)
+f.Data.DataTable.CreateFromSQL("LABEL","CON",V.Local.sSql)
+f.Data.DataTable.AddColumn("LABEL","COMPONENTS","STRING")
+'Function.Intrinsic.Debug.InvokeDebugger
+'Function.Intrinsic.Debug.Stop
+
+F.Intrinsic.Control.For(V.Local.iC,0,v.DataTable.LABEL.RowCount--,1)
+	v.Local.sPack.Set(v.DataTable.LABEL(v.Local.iC).PCK_NO!FIELDVALTRIM)
+	V.Local.sPallet.Set(v.DataTable.LABEL(v.Local.iC).PLLT_NO!FIELDVALTRIM)
+	F.Intrinsic.String.Build("SELECT PART, PART_DESC, QTY from V_BOL_PACK_DTL where PCK_NO = '{0}' AND PLLT_NO = '{1}'",V.Local.sPack,V.Local.sPallet,V.Local.sSql)
+	F.ODBC.Connection!con.executeandreturn(v.Local.sSql,20,v.Local.sRet)
+	'split and reorganize the returned data to format it for the 'list field' in Codesoft.
+	f.Intrinsic.String.Split(v.Local.sRet,"#$#",v.Local.sRet)
+	v.Local.sPart.Set("")
+	v.Local.sDesc.Set("")
+	v.Local.sQty.Set("")
+	f.Intrinsic.Control.For(v.Local.iCount,0,v.Local.sRet.UBound,1)
+		f.Intrinsic.String.Split(v.Local.sRet(v.Local.iCount),"*!*",v.Local.sLine)
+		f.Intrinsic.Control.If(v.local.sPart,=,"")
+			f.Intrinsic.String.Build("{0}$",v.Local.sLine(0),v.Local.sPart)
+		f.Intrinsic.Control.Else
+			f.Intrinsic.String.Build("{0}${1}",v.Local.sPart,v.Local.sLine(0),v.Local.sPart)
+		f.Intrinsic.Control.EndIf
+		f.Intrinsic.Control.If(v.Local.sDesc,=,"")
+			f.Intrinsic.String.Build("{0}$",v.Local.sLine(1),v.Local.sDesc)
+		f.Intrinsic.Control.Else
+			f.Intrinsic.String.Build("{0}${1}",v.Local.sDesc,v.Local.sLine(1),v.Local.sDesc)
+		f.Intrinsic.Control.EndIf
+		'dropping the trailing zeros in the quantity
+		f.Intrinsic.String.Format(v.Local.sLine(2),"####",v.Local.iQty)
+		f.Intrinsic.Control.If(v.Local.sQty,=,"")
+			f.Intrinsic.String.Build("{0}$",v.Local.iQty,v.Local.sQty)
+		f.Intrinsic.Control.Else
+			f.Intrinsic.String.Build("{0}${1}",v.Local.sQty,v.Local.iQty,v.Local.sQty)
+		f.Intrinsic.Control.EndIf
+	f.Intrinsic.Control.Next(v.Local.iCount)
+	f.Intrinsic.String.Build("{0}|{1}|{2}",v.Local.sPart,v.Local.sDesc,v.Local.sQty,v.Local.sRet)
+	F.Data.DataTable.SetValue("LABEL",V.Local.iC,"COMPONENTS",V.Local.sRet)
+F.Intrinsic.Control.Next(V.Local.iC)
+
+
+'Stopping Logging
+F.Global.BI.StopLogging(V.Global.iBILogID)
+
+'Printing Codesoft label
+F.Global.BI.PrintCodesoftLabelFromDatatable(V.Global.iBIRunID,V.Global.iBILogID,"LABEL","",True)
+
+
+Function.Intrinsic.Control.CallSub(Unload)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("LoadData_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+    Function.Intrinsic.String.Concat("Project: BIR_4932_OE_WL_Shipping_Label.g2u",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+    F.Intrinsic.UI.Msgbox(V.Local.sError)
+    F.Intrinsic.Control.CallSub(Unload)
+Function.Intrinsic.Control.EndIf
+Program.Sub.LoadData.End
+
+Program.Sub.Comments.Start
+${$0$}$BIR_PU_PO_
+$}$$}$12:00:00 AM
+Program.Sub.Comments.End
+
